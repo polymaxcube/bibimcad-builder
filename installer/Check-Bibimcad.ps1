@@ -100,6 +100,22 @@ if ($bibimcadManifests.Count -eq 0) {
     Pass "Manifest found: $($bibimcadManifests[0].File)"
 }
 
+Section 'Revit internal AddIns folder'
+$internalAddins = Join-Path $RevitInstallDir 'AddIns'
+if (Test-Path $internalAddins) {
+    $internalCopies = Get-ChildItem $internalAddins -Recurse -File -Filter '*.addin' -ErrorAction SilentlyContinue |
+        Where-Object { Select-String -Path $_.FullName -Pattern $AddInId -SimpleMatch -Quiet }
+    if ($internalCopies) {
+        foreach ($file in $internalCopies) {
+            Fail "Bibimcad manifest inside Revit's own AddIns folder: $($file.FullName)" "Revit reports it as duplicated and not signed, and loads neither copy. From an administrator PowerShell run: Rename-Item `"$($file.FullName)`" `"$($file.Name).disabled`""
+        }
+    } else {
+        Pass "No Bibimcad manifest under $internalAddins"
+    }
+} else {
+    Info "Folder does not exist: $internalAddins"
+}
+
 Section 'Manifest contents'
 $dllPath = $null
 if ($bibimcadManifests.Count -ge 1) {
@@ -177,7 +193,7 @@ if (Test-Path $JournalDir) {
     $journal = Get-ChildItem $JournalDir -Filter 'journal*.txt' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($journal) {
         Info "Journal: $($journal.FullName) ($($journal.LastWriteTime))"
-        $hits = Select-String -Path $journal.FullName -Pattern 'Bibimcad|6f4c2a81|External Application|AddIn.*(fail|error)' -ErrorAction SilentlyContinue | Select-Object -First 30
+        $hits = Select-String -Path $journal.FullName -Pattern 'Bibimcad|6f4c2a81|External Application|AddIn.*(fail|error)|duplicated|not signed' -ErrorAction SilentlyContinue | Select-Object -First 30
         if ($hits) {
             $hits | ForEach-Object { Add-Line "    $($_.LineNumber): $($_.Line.Trim())" }
         } else {

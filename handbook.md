@@ -1,25 +1,63 @@
 # Bibimcad install handbook
 
-Follow this file to install the Bibimcad Revit 2023 add-in on a Windows machine. `readme.md` is the short version for a person. This file is the procedure.
+This file is the procedure for an AI agent that installs or upgrades the Bibimcad Revit 2023 add-in on a Windows machine. `readme.md` is the short version for a person. `docs\architecture.md` explains the code.
+
+Follow the steps in order. Run every command in PowerShell. Stop and ask the user whenever a step says so; do not improvise around a failed check.
 
 ## Goal
 
-Produce `Bibimcad.Addin.dll`, point a `.addin` manifest at that DLL, put the manifest where Revit 2023 scans, and copy `project_state.json` to the path the add-in reads.
+1. Build `Bibimcad.Addin.dll` and its three dependency DLLs.
+2. Make exactly one `.addin` manifest, in the user Addins folder, point at that DLL.
+3. Make sure `C:\Bibimcad\data\project_state.json` exists, without overwriting a real one.
+4. Ask the user to restart Revit 2023 and confirm the **Bibimcad** tab shows buttons 01 to 07.
 
 Revit loads the add-in. There is no `dotnet run`.
 
-## Do not change
+## Fixed facts
 
-- Do not retarget `src\Bibimcad.Addin\Bibimcad.Addin.csproj` away from `net48`. Revit 2023 cannot load a .NET 8 DLL.
-- Do not change `<FullClassName>Bibimcad.App</FullClassName>`.
-- Do not change `<AddInId>6f4c2a81-9e37-4b5d-8c14-2a7e9b0d4f63</AddInId>`.
-- Do not copy `RevitAPI.dll` or `RevitAPIUI.dll` into the build output or into the Addins folder. The project deletes those copies after build. Revit already has them.
-- Do not put only the file name `Bibimcad.Addin.dll` in `<Assembly>`. Revit needs the full path.
-- Do not commit a machine-specific DLL path inside `installer\Bibimcad.addin` unless the user asks. Edit the deployed copy.
+| Item | Value |
+| --- | --- |
+| Revit version | 2023 only |
+| Target framework | `net48` (C# 7.3) |
+| Revit API folder (build only) | `C:\Program Files\Autodesk\Revit 2023` (`RevitInstallDir`) |
+| Manifest Revit reads | `%AppData%\Autodesk\Revit\Addins\2023\Bibimcad.addin` |
+| Manifest template in the repo | `installer\Bibimcad.addin` (contains `FULL_DLL_PATH_PLACEHOLDER`) |
+| Build output | `src\Bibimcad.Addin\bin\Debug\` |
+| DLLs that must stay together | `Bibimcad.Addin.dll`, `Bibimcad.Core.dll`, `Newtonsoft.Json.dll`, `netDxf.dll` |
+| `FullClassName` | `Bibimcad.App` |
+| `AddInId` | `6f4c2a81-9e37-4b5d-8c14-2a7e9b0d4f63` |
+| Project data | `C:\Bibimcad\data\project_state.json` |
+| Log | `C:\Bibimcad\logs\Bibimcad.log` |
+| Revit journals | `C:\Users\<user>\AppData\Local\Autodesk\Revit\Autodesk Revit 2023\Journals` |
+| Diagnostic script | `installer\Check-Bibimcad.ps1` |
+
+`RevitInstallDir` is only where the compiler finds `RevitAPI.dll` and `RevitAPIUI.dll`. It is not where the add-in is installed.
+
+## Rules
+
+- Do not retarget any project away from `net48`. Revit 2023 cannot load a .NET 8 DLL.
+- Do not change `FullClassName` or `AddInId`.
+- Do not copy `RevitAPI.dll` or `RevitAPIUI.dll` anywhere. Revit already has them.
+- Put the manifest only in `%AppData%\Autodesk\Revit\Addins\2023\`. **Never put a Bibimcad `.addin` file anywhere under `C:\Program Files\Autodesk\Revit 2023\`.** Revit treats that folder as its own, reports the file as "duplicated" and "not signed as internal addin", and then loads no Bibimcad copy at all.
+- There must be exactly one Bibimcad manifest on the machine.
+- `<Assembly>` must be a full path to the DLL, not just the file name.
+- Do not commit a machine-specific path into `installer\Bibimcad.addin`. Edit the deployed copy.
+- Never overwrite an existing `C:\Bibimcad\data\project_state.json`. It holds the user's link transform and wall review. Back it up before any upgrade.
+- Do not close or kill Revit yourself. Ask the user to save and close it.
+- Changes under `Program Files` need an administrator PowerShell. Rename files there (add `.disabled`); do not delete them, and do not change folder permissions.
+- A successful build does not prove Revit loaded the add-in. Only the user seeing the tab does.
+
+## 0. Decide: fresh install or upgrade
+
+```powershell
+Test-Path (Join-Path $env:APPDATA "Autodesk\Revit\Addins\2023\Bibimcad.addin")
+Test-Path C:\Bibimcad\data\project_state.json
+```
+
+- Both `False`: follow **Fresh install** (steps 1 to 6).
+- Either `True`: follow **Upgrade** (steps U1 to U6).
 
 ## 1. Check the machine
-
-Run in PowerShell:
 
 ```powershell
 dotnet --version
@@ -27,171 +65,182 @@ Test-Path "C:\Program Files\Autodesk\Revit 2023\RevitAPI.dll"
 Test-Path "C:\Program Files\Autodesk\Revit 2023\RevitAPIUI.dll"
 ```
 
-Required results:
+- `dotnet --version` must print a version. Any current SDK builds `net48`. If it is missing, stop and ask the user to install the [.NET SDK](https://dotnet.microsoft.com/download).
+- Both `Test-Path` lines must print `True`. If not, ask the user where Revit 2023 is installed and use that folder as `RevitInstallDir` in every build command. If Revit 2023 is not installed, stop.
+- If a later build says `net48` reference assemblies are missing, stop and ask the user to install the [.NET Framework 4.8 Developer Pack](https://dotnet.microsoft.com/download/dotnet-framework/net48).
 
-- `dotnet --version` prints a version. Any installed SDK can build `net48`.
-- Both `Test-Path` commands print `True`, or you find another folder that contains both DLLs. Call that folder `RevitInstallDir`.
+## Fresh install
 
-If `dotnet` is missing, stop and tell the user to install the .NET SDK. If the Revit 2023 DLLs are missing, stop. This add-in cannot be built or loaded without Revit 2023.
-
-The build also needs the .NET Framework 4.8 targeting pack. If `dotnet build` later reports that `net48` is not installed, stop and tell the user to install the .NET Framework 4.8 Developer Pack.
-
-## 2. Get the source
+### 2. Get the source
 
 Repository: `https://github.com/polymaxcube/bibimcad-builder.git`
 
 If this handbook is already inside a checkout, use that folder. Otherwise:
 
 ```powershell
-git clone https://github.com/polymaxcube/bibimcad-builder.git
-cd bibimcad-builder
+git clone https://github.com/polymaxcube/bibimcad-builder.git C:\bibimcad-builder-main
+cd C:\bibimcad-builder-main
 ```
 
-The working directory for every later command is the folder that contains `Bibimcad.sln`.
+Every later command runs in the folder that contains `Bibimcad.sln`. Confirm `Bibimcad.sln`, `src\Bibimcad.Addin\Bibimcad.Addin.csproj`, `installer\Bibimcad.addin`, and `data\project_state.json` exist.
 
-Confirm these files exist:
-
-- `Bibimcad.sln`
-- `src\Bibimcad.Addin\Bibimcad.Addin.csproj`
-- `installer\Bibimcad.addin`
-- `data\project_state.json`
-
-## 3. Build
-
-Default install folder:
+### 3. Build
 
 ```powershell
-dotnet build -p:RevitInstallDir="C:\Program Files\Autodesk\Revit 2023"
+dotnet build .\Bibimcad.sln -p:RevitInstallDir="C:\Program Files\Autodesk\Revit 2023"
 ```
 
-Other install folder:
+The first build downloads NuGet packages, so it needs internet and must not use `--no-restore`. Success is `Build succeeded` with exit code 0.
+
+Confirm all four DLLs exist in `src\Bibimcad.Addin\bin\Debug\`:
 
 ```powershell
-dotnet build -p:RevitInstallDir="D:\Autodesk\Revit 2023"
+"Bibimcad.Addin.dll", "Bibimcad.Core.dll", "Newtonsoft.Json.dll", "netDxf.dll" |
+    ForEach-Object { "$_ : " + (Test-Path ".\src\Bibimcad.Addin\bin\Debug\$_") }
 ```
 
-`dotnet build` with no `-c` flag writes Debug output. Success looks like `Build succeeded` and exit code 0.
-
-The solution also builds `Bibimcad.Core` and the `Bibimcad.Core.Tests` project. Only the add-in output is deployed.
-
-Confirm these files exist in `src\Bibimcad.Addin\bin\Debug\`:
-
-- `Bibimcad.Addin.dll`
-- `Bibimcad.Core.dll`
-- `Newtonsoft.Json.dll`
-- `netDxf.dll`
-
-Leave all four in that folder. Revit loads dependencies from the add-in DLL's folder, so the other three must stay beside `Bibimcad.Addin.dll`.
-
-A Release build uses `src\Bibimcad.Addin\bin\Release\` instead. Use one configuration and point the manifest at that same folder.
-
-## 4. Write the manifest Revit will read
-
-Read `installer\Bibimcad.addin`. It contains `<Assembly>FULL_DLL_PATH_PLACEHOLDER</Assembly>`.
-
-Create the Addins folder if needed, then copy the manifest there:
+### 4. Install the manifest
 
 ```powershell
 $addins = Join-Path $env:APPDATA "Autodesk\Revit\Addins\2023"
-New-Item -ItemType Directory -Force -Path $addins
-Copy-Item .\installer\Bibimcad.addin (Join-Path $addins "Bibimcad.addin")
+New-Item -ItemType Directory -Force -Path $addins | Out-Null
+$dll = (Resolve-Path .\src\Bibimcad.Addin\bin\Debug\Bibimcad.Addin.dll).Path
+(Get-Content .\installer\Bibimcad.addin -Raw).Replace("FULL_DLL_PATH_PLACEHOLDER", $dll) |
+    Set-Content (Join-Path $addins "Bibimcad.addin") -Encoding UTF8
 ```
 
-Set `<Assembly>` in the copied file to the full path of the DLL from step 3. Example:
+Leave every other element as it is in the template.
 
-```xml
-<Assembly>C:\src\bibimcad-builder\src\Bibimcad.Addin\bin\Debug\Bibimcad.Addin.dll</Assembly>
-```
+### 5. Install the project data file
 
-Leave every other element as it is in `installer\Bibimcad.addin`.
-
-Revit scans `%AppData%\Autodesk\Revit\Addins\2023\` for files whose name ends in `.addin`. The copy's file name may stay `Bibimcad.addin`. Revit does not treat the `.Addin` segment of the DLL name as special.
-
-## 5. Install the project state file
-
-The add-in reads only `C:\Bibimcad\data\project_state.json`. It does not create this file when it is missing. `PathUtils.GetProjectRoot()` returns `C:\Bibimcad`.
+Only when `C:\Bibimcad\data\project_state.json` does not exist:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path C:\Bibimcad\data
-Copy-Item .\data\project_state.json C:\Bibimcad\data\project_state.json
+New-Item -ItemType Directory -Force -Path C:\Bibimcad\data | Out-Null
+if (-not (Test-Path C:\Bibimcad\data\project_state.json)) {
+    Copy-Item .\data\project_state.json C:\Bibimcad\data\project_state.json
+}
 ```
 
-Do not point the add-in at `data\project_state.json` inside the repository. That file is the template.
+The add-in creates `C:\Bibimcad\logs\` itself.
 
-The log folder does not need to be created. The add-in creates `C:\Bibimcad\logs\` and appends `Bibimcad.log` on startup.
+### 6. Verify, then hand over
 
-## 6. Verify the installed files
+Go to **Verify** below.
 
-All of these must be true before telling the user to open Revit:
+## Upgrade
 
-- `%AppData%\Autodesk\Revit\Addins\2023\Bibimcad.addin` exists.
-- Its `<Assembly>` value is a full path, and that path exists.
-- `Bibimcad.Core.dll`, `Newtonsoft.Json.dll`, and `netDxf.dll` exist in the same folder as that DLL.
-- `<FullClassName>` is `Bibimcad.App`.
-- `C:\Bibimcad\data\project_state.json` exists and is not empty.
-- `installer\Bibimcad.addin` in the repository still says `FULL_DLL_PATH_PLACEHOLDER`, unless the user asked to store a machine path in git.
+Use this when Bibimcad was installed before and new code was pushed.
 
-PowerShell checks:
+### U1. Ask the user to save and close Revit
+
+Wait until this prints nothing:
+
+```powershell
+Get-Process -Name Revit -ErrorAction SilentlyContinue
+```
+
+A running Revit locks the DLL, and the build then fails with "file is being used by another process".
+
+### U2. Find the current install and back up
 
 ```powershell
 $manifest = Join-Path $env:APPDATA "Autodesk\Revit\Addins\2023\Bibimcad.addin"
-[xml]$xml = Get-Content $manifest
-$dll = $xml.RevitAddIns.AddIn.Assembly
-Test-Path $dll
-"Bibimcad.Core.dll", "Newtonsoft.Json.dll", "netDxf.dll" | ForEach-Object { Test-Path (Join-Path (Split-Path $dll) $_) }
-Test-Path C:\Bibimcad\data\project_state.json
-$xml.RevitAddIns.AddIn.FullClassName
+([xml](Get-Content $manifest)).RevitAddIns.AddIn.Assembly
 ```
 
-Expected class name: `Bibimcad.App`. Every `Test-Path` result must be `True`.
+The printed path ends in `\src\Bibimcad.Addin\bin\Debug\Bibimcad.Addin.dll`. The part before `\src\` is the source folder; call it `$repo` (for example `C:\bibimcad-builder-main`).
 
-`installer\Check-Bibimcad.ps1` runs these checks and more, and writes `Bibimcad_check.txt` to the Desktop:
+```powershell
+$repo = "C:\bibimcad-builder-main"   # use the folder found above
+$backup = "C:\Bibimcad\backup\$(Get-Date -Format yyyyMMdd-HHmm)"
+New-Item -ItemType Directory -Force -Path $backup | Out-Null
+Copy-Item C:\Bibimcad\data\project_state.json $backup -ErrorAction SilentlyContinue
+Copy-Item "$repo\AGENTS.md", "$repo\SKILLS.md" $backup -ErrorAction SilentlyContinue
+```
+
+`AGENTS.md` and `SKILLS.md` are local notes that may not be in the repository.
+
+### U3. Update the source in the same folder
+
+Keep the same folder so the manifest path stays valid.
+
+- If `$repo\.git` exists: `cd $repo; git pull`. If git reports local changes, stop and show them to the user.
+- Otherwise (ZIP download): ask the user for the new ZIP, delete the contents of `$repo`, and extract the ZIP so that `$repo\Bibimcad.sln` exists. Then copy `AGENTS.md` and `SKILLS.md` back from `$backup` if they were there.
+
+### U4. Build
+
+```powershell
+cd $repo
+dotnet build .\Bibimcad.sln -p:RevitInstallDir="C:\Program Files\Autodesk\Revit 2023"
+```
+
+Do not use `--no-restore`; a new version can add packages. Confirm the four DLLs as in step 3.
+
+### U5. Keep the manifest and the data
+
+- If the source folder did not move, do not touch the manifest.
+- If it moved, edit only `<Assembly>` in the deployed manifest to the new DLL path.
+- Do not copy the template over `C:\Bibimcad\data\project_state.json`. An older `schemaVersion` `1.0` file is upgraded to `1.1` automatically the first time a command saves it.
+
+### U6. Verify, then hand over
+
+Go to **Verify** below.
+
+## Verify
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\installer\Check-Bibimcad.ps1
 ```
 
-## 7. What the user does in Revit
+It writes `Bibimcad_check.txt` to the Desktop. Every line must be `[PASS]` or `[INFO]`. For each `[FAIL]`, apply the printed fix and run the script again.
 
-Ask the user to start Revit 2023, or to restart it if it was already open. Revit reads add-ins only at startup.
+The script checks for a Bibimcad manifest under `C:\Program Files\Autodesk\Revit 2023\AddIns`. If it finds one, ask the user to open an administrator PowerShell and run the printed `Rename-Item` command. Then confirm the `.addin` file is gone and the `.addin.disabled` backup exists.
 
-On startup it loads `Bibimcad.App` from `App.cs`. That creates:
+If the agent's environment variables point into a sandbox, `$env:APPDATA` and `$env:LOCALAPPDATA` may not be the real user folders. Use `C:\Users\<user>\AppData\Roaming` and `C:\Users\<user>\AppData\Local` instead before concluding that a file is missing.
 
-- Tab: **Bibimcad**
-- Panel: **K1 Workflow**
-- Button **01 Inspect**: reads `C:\Bibimcad\data\project_state.json`
-- Button **02 Coordinates**: reads the linked CAD transform and saves it into that same file
-- Button **03 Read DXF**: audits `cadSource.dxfPath` into `cadAudit`
-- Button **04 Classify**: writes `wallCandidates` from the layers in `cadSource.wallLayers`
-- Button **05 Review**: opens the review window; saves status, height, and notes
-- Button **06 Generate**: creates walls for approved candidates in one transaction
-- Button **07 Validate**: writes `validation`
+## Hand over to the user
 
-If the tab is missing, read `C:\Bibimcad\logs\Bibimcad.log`. A startup failure is also reported by a Revit task dialog when the log itself cannot be written.
+Ask the user to start Revit 2023. If Revit shows a security prompt for Bibimcad, choose **Always Load**. Then ask them to confirm:
 
-## 8. Prepare the wall workflow
+- Tab **Bibimcad**, panel **K1 Workflow**
+- Buttons **01 Inspect**, **02 Coordinates**, **03 Read DXF**, **04 Classify**, **05 Review**, **06 Generate**, **07 Validate**
 
-Installing does not need these, but buttons 03 to 07 do. Do them only when the user asks to run the wall workflow.
+Report to the user:
 
-- `cadSource.dxfPath` must point at a DXF file saved from `K1.dwg` as AutoCAD 2000 or later. netDxf cannot read DWG or R12. Do not convert the file yourself unless the user asks; ask where the DXF is.
-- `cadSource.unitCalibrationApproved` must be `true` and `mmPerCadUnit` must be positive. These are human decisions. Do not change them.
-- `cadSource.wallLayers` must list the wall layer names. Take them from the **03 Read DXF** report or ask the user. Do not guess layer names.
-- `project.defaultWallHeightMm` (number) and `project.targetLevelName` (string, an existing Revit level name) are optional.
+- fresh install or upgrade
+- build result
+- active manifest path and its `<Assembly>` value
+- whether all four DLLs exist
+- whether a duplicate manifest was found and disabled
+- whether `project_state.json` was kept, created, or backed up (and where)
+- whether the user confirmed the tab
 
-A `schemaVersion` `1.0` file is upgraded to `1.1` the first time a command saves it. Do not edit `wallCandidates`, `wallClassification`, or `validation` by hand; the commands own them.
+## If the tab is missing
+
+1. Run `Check-Bibimcad.ps1` again and fix every `[FAIL]`.
+2. Open the newest journal in `C:\Users\<user>\AppData\Local\Autodesk\Revit\Autodesk Revit 2023\Journals` and search for `Bibimcad`, `6f4c2a81`, `duplicated`, and `not signed`.
+   - `duplicated` or `not signed as internal addin`: a second manifest exists, usually under `Program Files`. Disable it as described in **Verify**.
+   - No Bibimcad lines at all: Revit did not find the manifest. Check its folder and extension (`.addin`, not `.addin.txt`).
+3. Read `C:\Bibimcad\logs\Bibimcad.log`. A missing log alone does not identify the cause.
+4. A DLL "blocked by Windows" needs `Unblock-File` on each of the four DLLs.
+
+The tab appearing but a button failing is a different problem, usually missing or incomplete data. Read the button's message.
+
+## Wall workflow setup
+
+Installation does not need this. Do it only when the user asks to run buttons 03 to 07.
+
+- `cadSource.dxfPath` must point at a DXF saved from `K1.dwg` as AutoCAD 2000 or later (default `C:\Bibimcad\input\K1.dxf`). DWG and R12 cannot be read. Ask the user for the file; do not convert it unless asked.
+- `cadSource.unitCalibrationApproved` and `mmPerCadUnit` are human decisions. Do not change them.
+- `cadSource.wallLayers` lists the wall layer names. Take them from the **03 Read DXF** report or from the user. Do not guess.
+- `project.defaultWallHeightMm` (number) and `project.targetLevelName` (an existing Revit level name) are optional.
+- Do not edit `wallCandidates`, `wallClassification`, or `validation` by hand. The commands own them.
+
+The user order in Revit is 03 Read DXF, set `wallLayers`, 04 Classify, 05 Review, 06 Generate, 07 Validate.
 
 Core tests run without Revit:
 
 ```powershell
 dotnet test tests\Bibimcad.Core.Tests\Bibimcad.Core.Tests.csproj
 ```
-
-## Rebuild
-
-After source changes:
-
-```powershell
-dotnet build -p:RevitInstallDir="C:\Program Files\Autodesk\Revit 2023"
-```
-
-Use the same `RevitInstallDir` as the first build. If the DLL path did not change, leave the manifest in the Addins folder alone. Tell the user to restart Revit. Revit keeps the old DLL loaded until it exits.
