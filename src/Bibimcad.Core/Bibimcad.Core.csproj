@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Bibimcad</RootNamespace>
+    <AssemblyName>Bibimcad.Core</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <Deterministic>true</Deterministic>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <Version>0.2.0</Version>
+    <Company>Bibimcad</Company>
+    <Product>Bibimcad</Product>
+    <Description>Bibimcad project model, JSON storage, DXF reading, and wall classification. No Revit references.</Description>
+  </PropertyGroup>
+
+  <!--
+    This project must never reference RevitAPI.dll or RevitAPIUI.dll.
+    It builds and tests on machines without Revit.
+  -->
+  <ItemGroup>
+    <PackageReference Include="netDxf" Version="2023.11.10" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bibimcad.Core.Tests" />
+  </ItemGroup>
+</Project>

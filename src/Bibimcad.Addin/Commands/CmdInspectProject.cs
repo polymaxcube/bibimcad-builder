@@ -55,9 +55,12 @@ namespace Bibimcad.Commands
                 return errors;
             }
 
-            if (!string.Equals(state.SchemaVersion, ProjectState.CurrentSchemaVersion, StringComparison.Ordinal))
+            if (!ProjectState.IsSupportedSchemaVersion(state.SchemaVersion))
             {
-                errors.Add("Schema version must be " + ProjectState.CurrentSchemaVersion + ".");
+                errors.Add(
+                    "Schema version must be one of "
+                    + string.Join(", ", ProjectState.SupportedSchemaVersions)
+                    + ".");
             }
 
             if (state.Project == null)

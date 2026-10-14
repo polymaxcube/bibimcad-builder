@@ -1,3 +1,0 @@
-F:\Cursor_Projects\BibimcadCsharp\src\Bibimcad.Addin\obj\Debug\Bibimcad.Addin.csproj.AssemblyReference.cache
-F:\Cursor_Projects\BibimcadCsharp\src\Bibimcad.Addin\obj\Debug\Bibimcad.Addin.GeneratedMSBuildEditorConfig.editorconfig
-F:\Cursor_Projects\BibimcadCsharp\src\Bibimcad.Addin\obj\Debug\Bibimcad.Addin.csproj.CoreCompileInputs.cache

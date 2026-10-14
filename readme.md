@@ -29,7 +29,7 @@ A successful build writes:
 
 `src\Bibimcad.Addin\bin\Debug\Bibimcad.Addin.dll`
 
-`Newtonsoft.Json.dll` is written next to it. Leave both files there.
+`Bibimcad.Core.dll`, `Newtonsoft.Json.dll`, and `netDxf.dll` are written next to it. Leave all of them in that folder; Revit loads them from there.
 
 ## 3. Point the manifest at that DLL
 
@@ -68,13 +68,45 @@ Logs are written to `C:\Bibimcad\logs\Bibimcad.log`.
 
 ## 6. Start Revit 2023
 
-On startup Revit loads `Bibimcad.App` from `App.cs`. That creates a **Bibimcad** tab with a **K1 Workflow** panel and two buttons:
+On startup Revit loads `Bibimcad.App` from `App.cs`. That creates a **Bibimcad** tab with a **K1 Workflow** panel and seven buttons:
 
 - **01 Inspect** reads the project state.
 - **02 Coordinates** reads the linked CAD transform and saves it.
+- **03 Read DXF** reads `cadSource.dxfPath` and lists its layers and entity counts.
+- **04 Classify** finds wall candidates on the wall layers.
+- **05 Review** opens a window to approve or reject candidates and set their heights.
+- **06 Generate** creates Revit walls for the approved candidates.
+- **07 Validate** checks those walls against the drawing within 1 mm.
 
 There is no `dotnet run`. Revit is the program that runs the add-in.
+
+## 7. Turn the DXF into walls
+
+Open the Revit project with `K1.dwg` linked, then:
+
+1. Save `K1.dwg` as DXF (AutoCAD 2000 or later) at the path in `cadSource.dxfPath`, by default `C:\Bibimcad\input\K1.dxf`. DWG files cannot be read.
+2. Click **03 Read DXF**. Note which layers hold the walls.
+3. In `C:\Bibimcad\data\project_state.json`, put those layer names in `cadSource.wallLayers`. Optionally set `project.defaultWallHeightMm` (for example `3000`) and `project.targetLevelName` (for example `"Level 1"`):
+
+   ```json
+   "wallLayers": ["A-WALL"],
+   ```
+
+4. Click **04 Classify**. Every candidate starts as unverified.
+5. Click **05 Review**. Approve the real walls, give each a height, and click **Save**. **Export CSV** and **Import CSV** let you review in Excel instead (`C:\Bibimcad\data\wall_review.csv`).
+6. Click **06 Generate** and confirm. Clicking it again does not duplicate walls.
+7. Click **07 Validate**. Failures are listed and saved under `validation` in the JSON file.
+
+Running **04 Classify** again keeps the review of candidates whose geometry did not change.
 
 ## After you change the code
 
 Run `dotnet build` again, then restart Revit. Revit keeps the DLL loaded until it closes.
+
+The DXF reading and wall logic lives in `src\Bibimcad.Core` and has tests that run without Revit:
+
+```powershell
+dotnet test tests\Bibimcad.Core.Tests\Bibimcad.Core.Tests.csproj
+```
+
+See `docs\architecture.md` for how the pieces fit together.

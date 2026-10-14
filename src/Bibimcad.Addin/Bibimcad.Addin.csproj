@@ -4,6 +4,7 @@
     <RootNamespace>Bibimcad</RootNamespace>
     <AssemblyName>Bibimcad.Addin</AssemblyName>
     <LangVersion>7.3</LangVersion>
+    <UseWPF>true</UseWPF>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -35,7 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <ProjectReference Include="..\Bibimcad.Core\Bibimcad.Core.csproj" />
   </ItemGroup>
 
   <Target Name="DoNotCopyRevitApi" AfterTargets="AfterBuild">

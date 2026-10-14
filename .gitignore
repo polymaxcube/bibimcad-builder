@@ -1,0 +1,39 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.pdb
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+
+# Visual Studio, Rider, VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+
+# NuGet
+*.nupkg
+packages/
+
+# Revit
+*.0001.rvt
+*.0002.rvt
+*.0003.rvt
+*.bak
+journal.*.txt
+
+# Local copies of the deployed manifest with a machine path
+installer/*.local.addin
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

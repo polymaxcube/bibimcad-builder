@@ -72,12 +72,16 @@ dotnet build -p:RevitInstallDir="D:\Autodesk\Revit 2023"
 
 `dotnet build` with no `-c` flag writes Debug output. Success looks like `Build succeeded` and exit code 0.
 
-Confirm both files exist:
+The solution also builds `Bibimcad.Core` and the `Bibimcad.Core.Tests` project. Only the add-in output is deployed.
 
-- `src\Bibimcad.Addin\bin\Debug\Bibimcad.Addin.dll`
-- `src\Bibimcad.Addin\bin\Debug\Newtonsoft.Json.dll`
+Confirm these files exist in `src\Bibimcad.Addin\bin\Debug\`:
 
-Leave both files in that folder. `Newtonsoft.Json.dll` must stay beside `Bibimcad.Addin.dll`, because Revit loads dependencies from the DLL's folder.
+- `Bibimcad.Addin.dll`
+- `Bibimcad.Core.dll`
+- `Newtonsoft.Json.dll`
+- `netDxf.dll`
+
+Leave all four in that folder. Revit loads dependencies from the add-in DLL's folder, so the other three must stay beside `Bibimcad.Addin.dll`.
 
 A Release build uses `src\Bibimcad.Addin\bin\Release\` instead. Use one configuration and point the manifest at that same folder.
 
@@ -122,7 +126,7 @@ All of these must be true before telling the user to open Revit:
 
 - `%AppData%\Autodesk\Revit\Addins\2023\Bibimcad.addin` exists.
 - Its `<Assembly>` value is a full path, and that path exists.
-- `Newtonsoft.Json.dll` exists in the same folder as that DLL.
+- `Bibimcad.Core.dll`, `Newtonsoft.Json.dll`, and `netDxf.dll` exist in the same folder as that DLL.
 - `<FullClassName>` is `Bibimcad.App`.
 - `C:\Bibimcad\data\project_state.json` exists and is not empty.
 - `installer\Bibimcad.addin` in the repository still says `FULL_DLL_PATH_PLACEHOLDER`, unless the user asked to store a machine path in git.
@@ -134,12 +138,18 @@ $manifest = Join-Path $env:APPDATA "Autodesk\Revit\Addins\2023\Bibimcad.addin"
 [xml]$xml = Get-Content $manifest
 $dll = $xml.RevitAddIns.AddIn.Assembly
 Test-Path $dll
-Test-Path (Join-Path (Split-Path $dll) "Newtonsoft.Json.dll")
+"Bibimcad.Core.dll", "Newtonsoft.Json.dll", "netDxf.dll" | ForEach-Object { Test-Path (Join-Path (Split-Path $dll) $_) }
 Test-Path C:\Bibimcad\data\project_state.json
 $xml.RevitAddIns.AddIn.FullClassName
 ```
 
-Expected class name: `Bibimcad.App`. Both `Test-Path` results for the DLL and `Newtonsoft.Json.dll` must be `True`.
+Expected class name: `Bibimcad.App`. Every `Test-Path` result must be `True`.
+
+`installer\Check-Bibimcad.ps1` runs these checks and more, and writes `Bibimcad_check.txt` to the Desktop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\installer\Check-Bibimcad.ps1
+```
 
 ## 7. What the user does in Revit
 
@@ -151,8 +161,30 @@ On startup it loads `Bibimcad.App` from `App.cs`. That creates:
 - Panel: **K1 Workflow**
 - Button **01 Inspect**: reads `C:\Bibimcad\data\project_state.json`
 - Button **02 Coordinates**: reads the linked CAD transform and saves it into that same file
+- Button **03 Read DXF**: audits `cadSource.dxfPath` into `cadAudit`
+- Button **04 Classify**: writes `wallCandidates` from the layers in `cadSource.wallLayers`
+- Button **05 Review**: opens the review window; saves status, height, and notes
+- Button **06 Generate**: creates walls for approved candidates in one transaction
+- Button **07 Validate**: writes `validation`
 
 If the tab is missing, read `C:\Bibimcad\logs\Bibimcad.log`. A startup failure is also reported by a Revit task dialog when the log itself cannot be written.
+
+## 8. Prepare the wall workflow
+
+Installing does not need these, but buttons 03 to 07 do. Do them only when the user asks to run the wall workflow.
+
+- `cadSource.dxfPath` must point at a DXF file saved from `K1.dwg` as AutoCAD 2000 or later. netDxf cannot read DWG or R12. Do not convert the file yourself unless the user asks; ask where the DXF is.
+- `cadSource.unitCalibrationApproved` must be `true` and `mmPerCadUnit` must be positive. These are human decisions. Do not change them.
+- `cadSource.wallLayers` must list the wall layer names. Take them from the **03 Read DXF** report or ask the user. Do not guess layer names.
+- `project.defaultWallHeightMm` (number) and `project.targetLevelName` (string, an existing Revit level name) are optional.
+
+A `schemaVersion` `1.0` file is upgraded to `1.1` the first time a command saves it. Do not edit `wallCandidates`, `wallClassification`, or `validation` by hand; the commands own them.
+
+Core tests run without Revit:
+
+```powershell
+dotnet test tests\Bibimcad.Core.Tests\Bibimcad.Core.Tests.csproj
+```
 
 ## Rebuild
 

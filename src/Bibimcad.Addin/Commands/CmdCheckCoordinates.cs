@@ -4,9 +4,9 @@ using System.Globalization;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using Autodesk.Revit.UI.Selection;
 using Bibimcad.Models;
 using Bibimcad.Services;
+using Bibimcad.UI;
 using Bibimcad.Utilities;
 
 namespace Bibimcad.Commands
@@ -14,8 +14,6 @@ namespace Bibimcad.Commands
     [Transaction(TransactionMode.ReadOnly)]
     public class CmdCheckCoordinates : IExternalCommand
     {
-        private const int MaxCommandLinks = 4;
-
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             try
@@ -29,7 +27,7 @@ namespace Bibimcad.Commands
                 Document document = uiDocument == null ? null : uiDocument.Document;
                 if (document == null)
                 {
-                    ShowDialog("Open a project.", "Open a Revit project before checking coordinates.");
+                    BibimcadDialog.Show("Open a project.", "Open a Revit project before checking coordinates.");
                     message = "No active Revit project.";
                     return Result.Failed;
                 }
@@ -38,14 +36,14 @@ namespace Bibimcad.Commands
                 ProjectState state = repository.Load();
                 if (state == null || state.CadSource == null || string.IsNullOrWhiteSpace(state.CadSource.DwgName))
                 {
-                    ShowDialog("Project state is incomplete.", "CAD source DWG name is missing from project_state.json.");
+                    BibimcadDialog.Show("Project state is incomplete.", "CAD source DWG name is missing from project_state.json.");
                     message = "CAD source DWG name is missing.";
                     return Result.Failed;
                 }
 
                 string dwgName = state.CadSource.DwgName.Trim();
                 ImportInstance importInstance;
-                if (!TryResolveImportInstance(uiDocument, document, dwgName, out importInstance))
+                if (!CadLinkPicker.TryResolve(uiDocument, document, dwgName, out importInstance))
                     return Result.Cancelled;
 
                 Transform transform = importInstance.GetTotalTransform();
@@ -64,7 +62,7 @@ namespace Bibimcad.Commands
                 repository.Save(state);
 
                 KnownDistanceCheck distanceCheck = coordinateService.ValidateKnownDistance(transform);
-                ShowDialog(
+                BibimcadDialog.Show(
                     distanceCheck.Passed ? "CAD coordinates" : "Distance check failed",
                     BuildReport(importInstance, cadName, transformInfo, distanceCheck));
 
@@ -88,154 +86,8 @@ namespace Bibimcad.Commands
             }
             catch (Exception ex)
             {
-                return Fail(ref message, "Coordinate check failed.", ex);
+                return BibimcadDialog.Fail(ref message, "Coordinate check failed.", ex);
             }
-        }
-
-        private static bool TryResolveImportInstance(
-            UIDocument uiDocument,
-            Document document,
-            string dwgName,
-            out ImportInstance importInstance)
-        {
-            importInstance = null;
-            List<ImportInstance> matches = FindLinkedMatches(document, dwgName);
-            LoggingUtils.Info(
-                "Linked CAD matches for '"
-                + dwgName
-                + "': "
-                + matches.Count.ToString(CultureInfo.InvariantCulture)
-                + ".");
-
-            if (matches.Count == 1)
-            {
-                importInstance = matches[0];
-                LoggingUtils.Info("Using the single matching CAD link " + Describe(document, importInstance) + ".");
-                return true;
-            }
-
-            if (matches.Count > 1)
-            {
-                if (matches.Count <= MaxCommandLinks)
-                    return TryChooseFromList(document, dwgName, matches, out importInstance);
-
-                if (!Confirm(
-                    "Several CAD links match.",
-                    "More than four linked CAD files match " + dwgName + ". Select the correct ImportInstance."))
-                {
-                    return false;
-                }
-
-                importInstance = PickImportInstance(
-                    uiDocument,
-                    document,
-                    "Select the linked CAD file named " + dwgName + ".");
-                return true;
-            }
-
-            if (!Confirm(
-                "No matching CAD link was found.",
-                "Bibimcad looked for a linked CAD file named " + dwgName + ". Select an ImportInstance manually."))
-            {
-                return false;
-            }
-
-            importInstance = PickImportInstance(
-                uiDocument,
-                document,
-                "Select a CAD import. No linked file named " + dwgName + " was found.");
-            LoggingUtils.Info("Using manually selected CAD " + Describe(document, importInstance) + ".");
-            return true;
-        }
-
-        private static List<ImportInstance> FindLinkedMatches(Document document, string dwgName)
-        {
-            List<ImportInstance> matches = new List<ImportInstance>();
-            FilteredElementCollector collector = new FilteredElementCollector(document);
-            collector.OfClass(typeof(ImportInstance));
-
-            foreach (Element element in collector)
-            {
-                ImportInstance importInstance = element as ImportInstance;
-                if (importInstance == null || !importInstance.IsValidObject || !importInstance.IsLinked)
-                    continue;
-
-                string cadName = ElementNameUtils.GetCadName(document, importInstance);
-                if (ElementNameUtils.NamesMatch(cadName, dwgName))
-                    matches.Add(importInstance);
-            }
-
-            return matches;
-        }
-
-        private static bool TryChooseFromList(
-            Document document,
-            string dwgName,
-            IList<ImportInstance> matches,
-            out ImportInstance importInstance)
-        {
-            importInstance = null;
-            TaskDialog dialog = new TaskDialog("Bibimcad");
-            dialog.TitleAutoPrefix = false;
-            dialog.MainInstruction = "Select the linked CAD file.";
-            dialog.MainContent = "More than one linked CAD file matches " + dwgName + ".";
-            dialog.CommonButtons = TaskDialogCommonButtons.Cancel;
-            dialog.AllowCancellation = true;
-
-            for (int i = 0; i < matches.Count; i++)
-            {
-                TaskDialogCommandLinkId linkId = (TaskDialogCommandLinkId)((int)TaskDialogCommandLinkId.CommandLink1 + i);
-                dialog.AddCommandLink(linkId, Describe(document, matches[i]));
-            }
-
-            TaskDialogResult dialogResult = dialog.Show();
-            if (dialogResult == TaskDialogResult.Cancel || dialogResult == TaskDialogResult.Close)
-                return false;
-
-            int index = (int)dialogResult - (int)TaskDialogCommandLinkId.CommandLink1;
-            if (index < 0 || index >= matches.Count)
-                return false;
-
-            importInstance = matches[index];
-            LoggingUtils.Info("User selected CAD link " + Describe(document, importInstance) + ".");
-            return true;
-        }
-
-        private static ImportInstance PickImportInstance(UIDocument uiDocument, Document document, string prompt)
-        {
-            Reference reference = uiDocument.Selection.PickObject(
-                ObjectType.Element,
-                new ImportInstanceSelectionFilter(),
-                prompt);
-
-            Element element = document.GetElement(reference);
-            ImportInstance importInstance = element as ImportInstance;
-            if (importInstance == null)
-                throw new InvalidOperationException("The selected element is not a CAD import.");
-
-            return importInstance;
-        }
-
-        private static bool Confirm(string instruction, string content)
-        {
-            TaskDialog dialog = new TaskDialog("Bibimcad");
-            dialog.TitleAutoPrefix = false;
-            dialog.MainInstruction = instruction;
-            dialog.MainContent = content;
-            dialog.CommonButtons = TaskDialogCommonButtons.Ok | TaskDialogCommonButtons.Cancel;
-            dialog.AllowCancellation = true;
-            return dialog.Show() == TaskDialogResult.Ok;
-        }
-
-        private static string Describe(Document document, ImportInstance importInstance)
-        {
-            string cadName = ElementNameUtils.GetCadName(document, importInstance);
-            if (string.IsNullOrWhiteSpace(cadName))
-                cadName = "(name unresolved)";
-
-            return cadName
-                + "  |  Id "
-                + importInstance.Id.IntegerValue.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string BuildReport(
@@ -277,46 +129,6 @@ namespace Bibimcad.Commands
         private static string FormatDecimal(double value)
         {
             return value.ToString("0.######", CultureInfo.InvariantCulture);
-        }
-
-        private static void ShowDialog(string instruction, string content)
-        {
-            TaskDialog dialog = new TaskDialog("Bibimcad");
-            dialog.TitleAutoPrefix = false;
-            dialog.MainInstruction = instruction;
-            dialog.MainContent = content;
-            dialog.Show();
-        }
-
-        private static Result Fail(ref string message, string summary, Exception ex)
-        {
-            try
-            {
-                LoggingUtils.Error(summary, ex);
-            }
-            catch (Exception logEx)
-            {
-                message = summary + " " + ex.Message + " Log write failed: " + logEx.Message;
-                ShowDialog(summary, message);
-                return Result.Failed;
-            }
-
-            message = summary + " See the Bibimcad log.";
-            ShowDialog(summary, ex.Message);
-            return Result.Failed;
-        }
-
-        private sealed class ImportInstanceSelectionFilter : ISelectionFilter
-        {
-            public bool AllowElement(Element element)
-            {
-                return element is ImportInstance;
-            }
-
-            public bool AllowReference(Reference reference, XYZ position)
-            {
-                return false;
-            }
         }
     }
 }
