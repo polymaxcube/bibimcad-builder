@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1.0",
+  "project": {
+    "systemName": "Bibimcad",
+    "projectName": "K1 BIM Conversion",
+    "targetRevitVersion": 2023,
+    "targetLod": 200
+  },
+  "cadSource": {
+    "dxfPath": "C:\\Bibimcad\\input\\K1.dxf",
+    "dwgName": "K1.dwg",
+    "headerInsUnits": "Inches",
+    "approvedCoordinateUnit": "Millimeters",
+    "mmPerCadUnit": 1.0,
+    "unitCalibrationApproved": true,
+    "calibrationNote": "AutoCAD DIST 6000 = drawing dimension 6000 mm"
+  },
+  "revitLink": {
+    "elementId": null,
+    "name": null,
+    "isLinked": false,
+    "transform": null
+  },
+  "cadAudit": {
+    "layerCount": 0,
+    "blockCount": 0,
+    "entityCounts": {},
+    "warnings": []
+  }
+}

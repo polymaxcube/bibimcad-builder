@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Bibimcad</RootNamespace>
+    <AssemblyName>Bibimcad.Addin</AssemblyName>
+    <LangVersion>7.3</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <Deterministic>true</Deterministic>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Configurations>Debug;Release</Configurations>
+    <Platforms>AnyCPU</Platforms>
+    <RevitInstallDir Condition="'$(RevitInstallDir)' == ''">C:\Program Files\Autodesk\Revit 2023</RevitInstallDir>
+  </PropertyGroup>
+
+  <!--
+    RevitAPI.dll and RevitAPIUI.dll ship with Autodesk Revit 2023.
+    They are not copied into this repository or into the build output.
+    Override RevitInstallDir if Revit 2023 is installed in another folder:
+      dotnet build -p:RevitInstallDir="D:\Autodesk\Revit 2023"
+  -->
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitInstallDir)\RevitAPI.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitInstallDir)\RevitAPIUI.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <Target Name="DoNotCopyRevitApi" AfterTargets="AfterBuild">
+    <Delete Files="$(TargetDir)RevitAPI.dll" Condition="Exists('$(TargetDir)RevitAPI.dll')" />
+    <Delete Files="$(TargetDir)RevitAPIUI.dll" Condition="Exists('$(TargetDir)RevitAPIUI.dll')" />
+    <Delete Files="$(TargetDir)RevitAPI.xml" Condition="Exists('$(TargetDir)RevitAPI.xml')" />
+    <Delete Files="$(TargetDir)RevitAPIUI.xml" Condition="Exists('$(TargetDir)RevitAPIUI.xml')" />
+  </Target>
+</Project>

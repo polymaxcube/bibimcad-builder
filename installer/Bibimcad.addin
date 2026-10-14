@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Bibimcad</Name>
+    <Assembly>FULL_DLL_PATH_PLACEHOLDER</Assembly>
+    <AddInId>6f4c2a81-9e37-4b5d-8c14-2a7e9b0d4f63</AddInId>
+    <FullClassName>Bibimcad.App</FullClassName>
+    <VendorId>BBMC</VendorId>
+    <VendorDescription>Bibimcad BIM Automation</VendorDescription>
+  </AddIn>
+</RevitAddIns>
