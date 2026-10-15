@@ -15,6 +15,8 @@
   <b>Read DXF</b> → <b>Classify</b> → <b>Review</b> → <b>Generate</b> → <b>Validate</b>
 </p>
 
+See [how Bibimcad works](docs/flowchart.md) for the flowchart.
+
 Revit 2023 add-in. Build it with the .NET CLI. Revit loads it. No code editor is required to install it.
 
 ## What you need
