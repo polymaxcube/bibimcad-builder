@@ -1,5 +1,16 @@
 # Bibimcad
 
+<p align="center">
+  <img src="docs/images/bibimcad-mascot-blueprint.jpg" alt="Bibimcad mascot pointing at a 3D wall model" width="520">
+</p>
+
+<details>
+<summary>Mascot character reference</summary>
+
+![Bibimcad mascot character reference](docs/images/bibimcad-mascot-reference.jpg)
+
+</details>
+
 Revit 2023 add-in. Build it with the .NET CLI. Revit loads it. No code editor is required to install it.
 
 ## What you need
