@@ -76,13 +76,22 @@ namespace Bibimcad.Commands
                     throw new InvalidOperationException("ImportInstance.GetTotalTransform() returned no transform.");
 
                 int existing = approved.Count(c => WallGenerationService.FindExistingWall(document, c) != null);
-                if (!BibimcadDialog.Confirm(
-                    "Create Revit walls?",
-                    "Approved candidates: " + approved.Count.ToString(CultureInfo.InvariantCulture)
-                        + Environment.NewLine + "Already in Revit (skipped): " + existing.ToString(CultureInfo.InvariantCulture)
-                        + Environment.NewLine + "To create: " + (approved.Count - existing).ToString(CultureInfo.InvariantCulture)
-                        + Environment.NewLine + "Level: " + level.Name
-                        + Environment.NewLine + "CAD link: " + CadLinkLocator.Describe(document, importInstance)))
+                string confirmation = "Approved candidates: " + approved.Count.ToString(CultureInfo.InvariantCulture)
+                    + Environment.NewLine + "Already in Revit (skipped): " + existing.ToString(CultureInfo.InvariantCulture)
+                    + Environment.NewLine + "To create: " + (approved.Count - existing).ToString(CultureInfo.InvariantCulture)
+                    + Environment.NewLine + "Level: " + level.Name
+                    + Environment.NewLine + "CAD link: " + CadLinkLocator.Describe(document, importInstance);
+
+                LinkSizeCheckInfo sizeCheck = state.RevitLink == null ? null : state.RevitLink.SizeCheck;
+                if (LinkSizeCheckResult.IsProblem(sizeCheck))
+                {
+                    confirmation += Environment.NewLine + Environment.NewLine
+                        + "Warning: the last 02 Coordinates link size check failed. Walls may not land on the CAD lines."
+                        + Environment.NewLine + sizeCheck.Message
+                        + Environment.NewLine + "Click Cancel and open 08 Help for the fix, or OK to create the walls anyway.";
+                }
+
+                if (!BibimcadDialog.Confirm("Create Revit walls?", confirmation))
                 {
                     return Result.Cancelled;
                 }

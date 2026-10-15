@@ -68,15 +68,16 @@ Logs are written to `C:\Bibimcad\logs\Bibimcad.log`.
 
 ## 6. Start Revit 2023
 
-On startup Revit loads `Bibimcad.App` from `App.cs`. That creates a **Bibimcad** tab with a **K1 Workflow** panel and seven buttons:
+On startup Revit loads `Bibimcad.App` from `App.cs`. That creates a **Bibimcad** tab with a **K1 Workflow** panel and eight buttons:
 
 - **01 Inspect** reads the project state.
-- **02 Coordinates** reads the linked CAD transform and saves it.
+- **02 Coordinates** reads the linked CAD transform and saves it. It also checks that K1.dwg in Revit has the same size and position as the DXF, and says so when the link was imported in the wrong unit (for example 25.4 times too big from inches).
 - **03 Read DXF** reads `cadSource.dxfPath` and lists its layers and entity counts.
 - **04 Classify** finds wall candidates on the wall layers.
 - **05 Review** opens a window to approve or reject candidates and set their heights.
 - **06 Generate** creates Revit walls for the approved candidates.
 - **07 Validate** checks those walls against the drawing within 1 mm.
+- **08 Help** shows what is wrong in this project right now and how to fix it, step by step, plus answers to common problems.
 
 There is no `dotnet run`. Revit is the program that runs the add-in.
 
@@ -98,6 +99,8 @@ Open the Revit project with `K1.dwg` linked, then:
 7. Click **07 Validate**. Failures are listed and saved under `validation` in the JSON file.
 
 Running **04 Classify** again keeps the review of candidates whose geometry did not change.
+
+If walls land away from the CAD drawing, click **02 Coordinates** and read its link size check, then **08 Help**. The usual cause is K1.dwg linked with **Import units: Auto-Detect**, which Revit reads as inches. Relink it with **Import units: Millimeter** instead of moving walls by hand.
 
 ## After you change the code
 

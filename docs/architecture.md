@@ -32,7 +32,7 @@ DXF
 07 Validate     → validation
 ```
 
-`01 Inspect` and `02 Coordinates` stay as they were. Coordinates saves `revitLink`.
+`01 Inspect` reads the file. `02 Coordinates` saves `revitLink`, including the link size check in `revitLink.sizeCheck`. `08 Help` only reads the file and explains what to do next.
 
 ## Projects
 
@@ -132,6 +132,18 @@ JSON stores the transform origin and basis in Revit internal units (feet). The C
 
 `ValidateKnownDistance` maps local points `(0,0,0)` and `(6000,0,0)` through the same path and checks that the resulting distance is about 6000 mm. A difference of 1 mm or less passes.
 
+That check cannot see the import units. When K1.dwg is linked with Import units = Auto-Detect and an `Inches` header, Revit scales the link geometry by 25.4 while `GetTotalTransform()` keeps scale 1. Walls are then the right size but land at 1/25.4 of their distance from the origin.
+
+### Link size check
+
+`02 Coordinates` therefore also compares the line work on `cadSource.wallLayers` (all layers when empty):
+
+- DXF side: `DxfExtentsReader` collects lines and polyline vertices in millimeters, including lines inside block references.
+- Revit side: `LinkGeometryReader` walks the link geometry (including nested blocks), maps every point to model coordinates, and back through the inverse of `GetTotalTransform()`. The result is in the same CAD-local millimeters that Generate feeds forward.
+- `LinkSizeCheck.Evaluate` compares the two boxes. A ratio within 1% of 1 and a shift of 5 mm or less passes. A ratio that matches 25.4, 304.8, 10, 100, or 1000 names the likely import unit. Matching size with a larger shift reports `Offset`.
+
+The result is saved as `revitLink.sizeCheck`. Generate does not refuse to run when it failed; its confirmation shows a warning. Fix the link, not `mmPerCadUnit`.
+
 ## Why the transform is not hardcoded
 
 The placement of K1 can change. Coordinates, Generate, and Validate call `ImportInstance.GetTotalTransform()` on the current link every time. Previous observed origin values are not constants in this code. If the link moves after walls are generated, Validate reports the endpoint error.
@@ -186,6 +198,9 @@ It writes `validation` (timestamp, tolerance, checked, passed, and failed counts
 | 05 Review | Read-only | No |
 | 06 Generate | Manual, one transaction | Yes: walls and `Bibimcad - … mm` wall types |
 | 07 Validate | Read-only | No |
+| 08 Help | Read-only, does not save | No |
+
+`08 Help` builds its list with `HelpAdvisor` in Core from `project_state.json`: missing files, a DXF that is one block, empty or misspelled wall layers, a failed link size check, approved walls without height, walls not generated, and validation failures. Each topic has numbered steps. A fixed list of common problems follows.
 
 No AI classification, doors, windows, floors, stairs, equipment, structure, MEP, or Revit 2026 support is included.
 

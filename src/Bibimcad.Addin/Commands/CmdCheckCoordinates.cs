@@ -54,23 +54,31 @@ namespace Bibimcad.Commands
                 CadTransformInfo transformInfo = coordinateService.Capture(transform);
                 string cadName = ElementNameUtils.GetCadName(document, importInstance);
 
+                LinkSizeCheckInfo sizeCheck = RunSizeCheck(document, importInstance, transform, state.CadSource, DateTime.Now);
+
                 state.RevitLink = new RevitLinkInfo();
                 state.RevitLink.ElementId = importInstance.Id.IntegerValue;
                 state.RevitLink.Name = cadName;
                 state.RevitLink.IsLinked = importInstance.IsLinked;
                 state.RevitLink.Transform = transformInfo;
+                state.RevitLink.SizeCheck = sizeCheck;
                 repository.Save(state);
 
                 KnownDistanceCheck distanceCheck = coordinateService.ValidateKnownDistance(transform);
-                BibimcadDialog.Show(
-                    distanceCheck.Passed ? "CAD coordinates" : "Distance check failed",
-                    BuildReport(importInstance, cadName, transformInfo, distanceCheck));
+                string title = !distanceCheck.Passed
+                    ? "Distance check failed"
+                    : LinkSizeCheckResult.IsProblem(sizeCheck) ? "Link size check failed" : "CAD coordinates";
+                BibimcadDialog.Show(title, BuildReport(importInstance, cadName, transformInfo, distanceCheck, sizeCheck));
 
                 LoggingUtils.Info(
                     "Saved CAD transform for element "
                     + importInstance.Id.IntegerValue.ToString(CultureInfo.InvariantCulture)
                     + ". Distance check "
-                    + (distanceCheck.Passed ? "passed." : "failed."));
+                    + (distanceCheck.Passed ? "passed." : "failed.")
+                    + " Link size check: "
+                    + sizeCheck.Result
+                    + (sizeCheck.Ratio.HasValue ? " (ratio " + sizeCheck.Ratio.Value.ToString("0.####", CultureInfo.InvariantCulture) + ")" : string.Empty)
+                    + ".");
 
                 if (!distanceCheck.Passed)
                 {
@@ -90,11 +98,49 @@ namespace Bibimcad.Commands
             }
         }
 
+        private static LinkSizeCheckInfo RunSizeCheck(
+            Document document,
+            ImportInstance importInstance,
+            Transform transform,
+            CadSourceInfo cadSource,
+            DateTime now)
+        {
+            if (string.IsNullOrWhiteSpace(cadSource.DxfPath))
+                return LinkSizeCheck.Skipped("cadSource.dxfPath is empty, so the link size was not checked.", now);
+            if (cadSource.MmPerCadUnit <= 0.0)
+                return LinkSizeCheck.Skipped("cadSource.mmPerCadUnit must be positive to check the link size.", now);
+
+            List<string> layers = new List<string>();
+            if (cadSource.WallLayers != null)
+            {
+                foreach (string layer in cadSource.WallLayers)
+                {
+                    if (!string.IsNullOrWhiteSpace(layer))
+                        layers.Add(layer.Trim());
+                }
+            }
+
+            netDxf.DxfDocument dxf;
+            try
+            {
+                dxf = DxfLoader.Load(cadSource.DxfPath);
+            }
+            catch (Exception ex)
+            {
+                return LinkSizeCheck.Skipped("The DXF could not be read, so the link size was not checked: " + ex.Message, now);
+            }
+
+            CadExtents dxfExtents = DxfExtentsReader.Read(dxf, layers, cadSource.MmPerCadUnit);
+            CadExtents linkExtents = LinkGeometryReader.ReadLocalExtentsMm(document, importInstance, transform, layers);
+            return LinkSizeCheck.Evaluate(dxfExtents, linkExtents, layers, now);
+        }
+
         private static string BuildReport(
             ImportInstance importInstance,
             string cadName,
             CadTransformInfo transformInfo,
-            KnownDistanceCheck distanceCheck)
+            KnownDistanceCheck distanceCheck,
+            LinkSizeCheckInfo sizeCheck)
         {
             if (string.IsNullOrWhiteSpace(cadName))
                 cadName = "(name unresolved)";
@@ -122,8 +168,39 @@ namespace Bibimcad.Commands
                 + " ("
                 + FormatDecimal(distanceCheck.MeasuredMillimeters)
                 + " mm)");
+
+            lines.Add(string.Empty);
+            lines.Add("Link size check ("
+                + (sizeCheck.Layers.Count > 0 ? "layers: " + string.Join(", ", sizeCheck.Layers.ToArray()) : "all layers")
+                + "): "
+                + sizeCheck.Result);
+            if (sizeCheck.DxfWidthMm.HasValue && sizeCheck.LinkWidthMm.HasValue)
+            {
+                lines.Add("  DXF:           " + FormatSize(sizeCheck.DxfWidthMm.Value, sizeCheck.DxfHeightMm ?? 0.0));
+                lines.Add("  Link in Revit: " + FormatSize(sizeCheck.LinkWidthMm.Value, sizeCheck.LinkHeightMm ?? 0.0));
+            }
+            if (sizeCheck.Ratio.HasValue)
+                lines.Add("  Ratio (Revit / DXF): " + sizeCheck.Ratio.Value.ToString("0.####", CultureInfo.InvariantCulture));
+            if (sizeCheck.OffsetXMm.HasValue && sizeCheck.OffsetYMm.HasValue)
+            {
+                lines.Add("  Shift: X " + FormatDecimal(sizeCheck.OffsetXMm.Value)
+                    + " mm, Y " + FormatDecimal(sizeCheck.OffsetYMm.Value) + " mm");
+            }
+            lines.Add("  " + sizeCheck.Message);
+            if (sizeCheck.Result != LinkSizeCheckResult.Passed)
+                lines.Add("  Click 08 Help for step-by-step instructions.");
+
+            lines.Add(string.Empty);
             lines.Add("Saved: " + PathUtils.GetProjectStatePath());
             return string.Join(Environment.NewLine, lines.ToArray());
+        }
+
+        private static string FormatSize(double widthMm, double heightMm)
+        {
+            return widthMm.ToString("#,0", CultureInfo.InvariantCulture)
+                + " x "
+                + heightMm.ToString("#,0", CultureInfo.InvariantCulture)
+                + " mm";
         }
 
         private static string FormatDecimal(double value)

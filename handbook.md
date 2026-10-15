@@ -1,6 +1,6 @@
 # Bibimcad install handbook
 
-This file is the procedure for an AI agent that installs or upgrades the Bibimcad Revit 2023 add-in on a Windows machine. `readme.md` is the short version for a person. `docs\architecture.md` explains the code.
+This file is the procedure for an AI agent that installs or upgrades the Bibimcad Revit 2023 add-in on a Windows machine. `AGENTS.md` has the current project state, open problems, and next steps; read it before continuing any work. `readme.md` is the short version for a person. `docs\architecture.md` explains the code.
 
 Follow the steps in order. Run every command in PowerShell. Stop and ask the user whenever a step says so; do not improvise around a failed check.
 
@@ -166,7 +166,8 @@ Copy-Item "$repo\AGENTS.md", "$repo\SKILLS.md" $backup -ErrorAction SilentlyCont
 Keep the same folder so the manifest path stays valid.
 
 - If `$repo\.git` exists: `cd $repo; git pull`. If git reports local changes, stop and show them to the user.
-- Otherwise (ZIP download): ask the user for the new ZIP, delete the contents of `$repo`, and extract the ZIP so that `$repo\Bibimcad.sln` exists. Then copy `AGENTS.md` and `SKILLS.md` back from `$backup` if they were there.
+  - If git refuses because an untracked `AGENTS.md` would be overwritten, rename the local one first (`Rename-Item AGENTS.md AGENTS.local.md`) and pull again. The repository `AGENTS.md` already contains the confirmed repair history. Compare the two and tell the user about anything in `AGENTS.local.md` that is missing.
+- Otherwise (ZIP download): ask the user for the new ZIP, delete the contents of `$repo`, and extract the ZIP so that `$repo\Bibimcad.sln` exists. The ZIP contains `AGENTS.md`; do not overwrite it with the backup. Copy the old one back as `AGENTS.local.md` (and `SKILLS.md` if it was there) and compare as above.
 
 ### U4. Build
 
@@ -204,7 +205,7 @@ If the agent's environment variables point into a sandbox, `$env:APPDATA` and `$
 Ask the user to start Revit 2023. If Revit shows a security prompt for Bibimcad, choose **Always Load**. Then ask them to confirm:
 
 - Tab **Bibimcad**, panel **K1 Workflow**
-- Buttons **01 Inspect**, **02 Coordinates**, **03 Read DXF**, **04 Classify**, **05 Review**, **06 Generate**, **07 Validate**
+- Buttons **01 Inspect**, **02 Coordinates**, **03 Read DXF**, **04 Classify**, **05 Review**, **06 Generate**, **07 Validate**, **08 Help**
 
 Report to the user:
 
@@ -225,7 +226,15 @@ Report to the user:
 3. Read `C:\Bibimcad\logs\Bibimcad.log`. A missing log alone does not identify the cause.
 4. A DLL "blocked by Windows" needs `Unblock-File` on each of the four DLLs.
 
-The tab appearing but a button failing is a different problem, usually missing or incomplete data. Read the button's message.
+The tab appearing but a button failing is a different problem, usually missing or incomplete data. Read the button's message, then ask the user to click **08 Help**: it lists the problems it finds in `project_state.json` with step-by-step fixes.
+
+## If walls land away from the CAD drawing
+
+Ask the user to click **02 Coordinates** and read the "Link size check" lines.
+
+- `ScaleMismatch` with ratio about 25.4: K1.dwg was linked as inches (Import units: Auto-Detect). Guide the user through the relink steps shown in **08 Help**. Do not change `mmPerCadUnit`, and do not move walls by hand.
+- `Offset`: the DXF was saved from a moved or different copy of the drawing. Ask for a new DXF from the linked K1.dwg.
+- `Inconclusive` or `Skipped`: the DXF path or `wallLayers` is wrong, or the link and DXF are different drawings. Read the message.
 
 ## Wall workflow setup
 

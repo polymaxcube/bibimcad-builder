@@ -33,6 +33,9 @@ journal.*.txt
 # Local copies of the deployed manifest with a machine path
 installer/*.local.addin
 
+# Machine-specific agent notes
+AGENTS.local.md
+
 # OS
 Thumbs.db
 Desktop.ini

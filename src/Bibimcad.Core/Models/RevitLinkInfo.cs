@@ -16,5 +16,8 @@ namespace Bibimcad.Models
 
         [JsonProperty("transform", Order = 4)]
         public CadTransformInfo Transform { get; set; }
+
+        [JsonProperty("sizeCheck", Order = 5)]
+        public LinkSizeCheckInfo SizeCheck { get; set; }
     }
 }

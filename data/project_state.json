@@ -22,7 +22,8 @@
     "elementId": null,
     "name": null,
     "isLinked": false,
-    "transform": null
+    "transform": null,
+    "sizeCheck": null
   },
   "cadAudit": {
     "layerCount": 0,

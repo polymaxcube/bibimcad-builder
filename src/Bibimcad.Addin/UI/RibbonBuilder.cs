@@ -47,6 +47,11 @@ namespace Bibimcad.UI
                 "07\nValidate",
                 "Bibimcad.Commands.CmdValidateWalls",
                 "Check each approved wall's endpoints, length, width, and height within 1 mm and save the result."),
+            new ButtonSpec(
+                "Bibimcad_Help",
+                "08\nHelp",
+                "Bibimcad.Commands.CmdHelp",
+                "Show what is wrong in this project and how to fix it, step by step."),
         };
 
         public static void Build(UIControlledApplication application)
