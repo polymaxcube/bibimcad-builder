@@ -4,12 +4,16 @@
   <img src="docs/images/bibimcad-mascot-blueprint.jpg" alt="Bibimcad mascot pointing at a 3D wall model" width="520">
 </p>
 
-<details>
-<summary>Mascot character reference</summary>
+<h3 align="center">From flat CAD lines to real Revit walls, in eight clicks.</h3>
 
-![Bibimcad mascot character reference](docs/images/bibimcad-mascot-reference.jpg)
+<p align="center">
+  Read the DXF, find the walls, approve them, build them, and check every one to the millimeter.<br>
+  You stay in charge: nothing is built until you approve it.
+</p>
 
-</details>
+<p align="center">
+  <b>Read DXF</b> → <b>Classify</b> → <b>Review</b> → <b>Generate</b> → <b>Validate</b>
+</p>
 
 Revit 2023 add-in. Build it with the .NET CLI. Revit loads it. No code editor is required to install it.
 
